@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en" ng-app="wa_dashboard">
+	<head>
+		<meta charset="utf-8">
+		<title>CHR</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+
+		<link rel="shortcut icon" href="images/favicon.ico">
+		<link rel="stylesheet" href="//code.jquery.com/ui/1.11.0/themes/smoothness/jquery-ui.css">
+		<link rel="stylesheet" href="css/style.css" />
+		
+		<script src="http://demo.oicweave.org/swfobject.js"></script>
+		<script src="//code.jquery.com/jquery-1.10.2.js"></script>
+		<script src="//code.jquery.com/ui/1.11.0/jquery-ui.js"></script>
+		<script src="js/jquery.tinysort.min.js"></script>
+		<script src="js/jquery.dd.min.js"></script>
+		<script src="js/angular/1.2/angular.min.js"></script>
+		<script src="js/globals.js"></script>
+		<script src="js/weave-tools.js"></script>
+		<script src="js/scripts.js"></script>
+		<script src="js/CardUtils.js"></script>
+		<script src="js/Base64.js"></script>
+		<script src="app/app.js"></script>
+	</head>
+	<body>
+		<div id="wrapper">
+			<div id="header">
+				<div id="navbar">
+				<a href="index.html"><div id="home">&nbsp;</div></a>
+				<ul id="navList">
+					<li><a href="index.html">Dashboard</a></li>
+					<li><a href="index.html">Analyze</a></li>
+					<li><a href="#">Reports</a></li>
+					<li><a href="#">Projects</a></li>
+				</ul>
+				</div>
+			</div>
+			
+			<div id="content">
+				<h1>Executive Dashboard</h1>
+				
+				<div id="cards">
+					<div class="card">
+						<div class="tile add">
+							<h3>Loading...</h3>
+						</div>
+					</div>
+				</div>
+			</div>
+			
+			<div class="push"></div>
+		</div>
+		<div id="footer">
+		</div>
+		<script>
+			function getWeave() {
+				return document.getElementById("weave");
+			}
+			function weaveReady() {
+				weaveIsReady = true;
+				
+				extendPaths();
+			}
+			
+			$(function () {
+				
+				initFlash( defaultSession );
+				loadCardsWrapper();
+				//setInterval( loadCardsWrapper, 60000 );
+				
+				$(".modal-backdrop").click(function() {
+					$(".modal-backdrop").animate(
+						{
+							opacity: "0"
+						}, 
+						500, "linear",
+						function() {
+							$(".modal-backdrop").hide();
+							
+						}
+					);
+					$("#modal").animate(
+						{
+							top: "-100%",
+							opacity: "0"
+						}, 500);
+				});
+				
+				//////////////////////////////////////////////////////////////
+				//						ADD A CARD PAGE						//
+				//////////////////////////////////////////////////////////////
+				$("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").change(function() {
+					getEntityTree(
+						baseHost + dataSrv,
+						numeratorEntityID,
+						function( tree ) {
+							var html = "";
+							var disease = $("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").val();
+							var indicators = getDistinctSet( tree, "indicator", { "code" : disease } );
+							
+							console.log( "indicators", indicators );
+							for( var i in indicators )
+								html += ( "<option val='" + indicators[i] + "'>" + indicators[i] + "</option>" );
+							
+							$("#diseaseIndicatorRow > .addCardDynamicSelectWrapper > select").html(html);
+							$("#diseaseIndicatorRow > .addCardDynamicSelectWrapper > select").change();
+						}
+					);
+				});
+				$("#diseaseIndicatorRow > .addCardDynamicSelectWrapper > select").change(function() {
+					getEntityTree(
+						baseHost + dataSrv,
+						numeratorEntityID,
+						function( tree ) {
+							var html = "";
+							var disease = $("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").val();
+							var indicator = $("#diseaseIndicatorRow > .addCardDynamicSelectWrapper > select").val();
+							var years = getDistinctSet( tree, "year", { "code" : disease, "indicator" : indicator } );
+							
+							console.log( "years", years );
+							for( var i in years )
+								html += ( "<option val='" + years[i] + "'>" + years[i] + "</option>" );
+							
+							$("#diseaseYearRow > .addCardDynamicSelectWrapper > select").html(html);
+							$("#diseaseYearRow > .addCardDynamicSelectWrapper > select").change();
+						}
+					);
+				});
+				
+				$(".addCardDynamicPillGroup > li > a").click(function() {
+				
+					$(this).parents(".addCardDynamicPillGroup").children().removeClass("active");
+					$(this).parent().addClass("active");
+					
+				});
+				
+				getEntityTree(
+					baseHost + dataSrv,
+					numeratorEntityID,
+					function( tree ) {
+						var html = "";
+						var diseases = getDistinctSet( tree, "code" );
+						for( var i in diseases )
+							html += ( "<option val='" + diseases[i] + "'>" + diseases[i] + "</option>" );
+						
+						$("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").html(html);
+						$("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").change();
+					}
+				);
+					
+				$("#addCardSaveBtn").click(function() {
+					
+					getEntityTree(
+						baseHost + dataSrv,
+						numeratorEntityID,
+						function( num_tree ) {
+							getEntityTree(
+								baseHost + dataSrv,
+								denominatorEntityID,
+								function( denom_tree ) {
+									
+									numeratorSearch = [ { 
+										"code": $("#diseaseCodeRow > .addCardDynamicSelectWrapper > select").val(),
+										"indicator": $("#diseaseIndicatorRow > .addCardDynamicSelectWrapper > select").val(),
+										"year": $("#diseaseYearRow > .addCardDynamicSelectWrapper > select").val()
+									} ];
+									denominatorSearch = [ {
+										"name": "Population",
+										"year": Math.round( $("#diseaseYearRow > .addCardDynamicSelectWrapper > select").val() / 10 ) * 10
+									} ];
+										
+									console.log( "Num Tree: ", num_tree );
+									console.log( "Denom Tree: ", denom_tree );
+									console.log( "Num Search: ", numeratorSearch );
+									console.log( "Denom Search: ", denominatorSearch );
+									
+									var title 		= $("#modalAddTitle").val(),
+										target 		= $("#modalAddTarget").val(),
+										race		= $("#demographicRaceRow > .addCardDynamicPillGroup > .active").text(),
+										gender		= $("#demographicGenderRow > .addCardDynamicPillGroup > .active").text(),
+										numObj 		= getEntityObjectByMetadataPath( num_tree, numeratorSearch ),
+										denomObj 	= getEntityObjectByMetadataPath( denom_tree, denominatorSearch ),
+										numId 		= numObj != null ? numObj.id : 0,
+										numUnit 	= numObj != null ? numObj.publicMetadata.unit : "Error",
+										denomId 	= denomObj != null ? denomObj.id : 0,
+										denomUnit 	= denomObj != null ? denomObj.publicMetadata.unit : "Error",
+										targetUnit 	= numUnit,
+										keyFilter	= "",
+										sqlFilter	= JSON.stringify({ loc: "%", race: race, gender: gender });
+										
+									console.log( "numid: ", numId );
+									console.log( "denomid: ", denomId );
+									
+									var o = {
+										cardHash: "c4ca4238a0b923820dcc509a6f75849b",
+										title: title,
+										numerator: numId,
+										numerator_unit: numUnit,
+										denominator: denomId,
+										denominator_unit: denomUnit,
+										target: target,
+										target_unit: targetUnit,
+										geometry: 215512,
+										type: 1,
+										keyFilter: keyFilter,
+										sqlFilter: sqlFilter,
+										disposition: 0
+									};
+									console.log( "creatingCard: ", o );
+									createNewCard( o, function() {
+										loadCardsWrapper();
+										$(".modal-backdrop").trigger("click");
+									});
+								}
+							);
+						}
+					);
+				});
+				
+				
+				//////////////////////////////////////////////////////////////
+				//					MODAL POPUP WEAVE PAGE					//
+				//////////////////////////////////////////////////////////////
+				$("#modal-body-weave > .addCardDynamicPillGroup > li > a").click(function() {
+					var text = $(this).text();
+					
+					$(this).parents(".addCardDynamicPillGroup").children().removeClass("active");
+					$(this).parent().addClass("active");
+					
+					getWeave()
+						.path(["defaultColorBinColumn", "binningDefinition", 0])
+						.request("NaturalJenksBinningDefinition")
+						.state({ "numOfBins": 5 });
+							
+					
+					var colorLegend = "ColorLegend";
+					getWeave().path([colorLegend]).request("ColorBinLegendTool").state({
+						"minimized": false, "maximized": false, "panelBackgroundColor": 16382715
+					});
+					
+					// Card info exists in the 'cardInModal' object
+					if( text == "Table" )
+					{
+						var tool = "TableTool",
+							columns = [ tool, "columns" ],
+							i = 0, keys = [], values = [];
+							
+						
+						getWeave().path(tool).request(tool).state({
+							"maximized": true, "panelBackgroundColor": 16382715, "backgroundColor1": 16382715, "backgroundColor2":16382715
+						});
+						getWeave().path(colorLegend).state({"zOrder": -1});
+						getWeave().path().reorder([tool]);
+						
+						getWeave().path(columns.concat(["Numerator"])).request("ReferencedColumn");
+						getWeave().path(columns.concat(["Denominator"])).request("ReferencedColumn");
+						
+						keys = [
+							columns.concat(["Numerator"]),
+							columns.concat(["Denominator"])
+						];
+						values = [
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.denominator, "sqlParams": toArray(cardInModal.sqlFilter) }
+						];
+						for( i = 0; i < keys.length; i++ )
+							setColumnMetadata( getWeave(), keys[i], values[i], "WeaveDataSource" );
+							
+						getWeave().path(columns).reorder(["Denominator", "Numerator"]);
+					}
+					else if( text == "Chart" )
+					{
+						var tool = "CompoundBarChartTool",
+							plotMngr = [ tool, "children", "visualization", "plotManager" ],
+							plotters = plotMngr.concat(["plotters"]),
+							layerSettings = plotMngr.concat(["layerSettings"]),
+							i = 0, keys = [], values = [];
+							
+						getWeave().path(tool).request(tool).state({
+							"maximized": true, "panelBackgroundColor": 16382715
+						});
+						getWeave().path(colorLegend).state({"zOrder": -1});
+						getWeave().path().reorder([tool]);
+						
+						getWeave().path(plotters.concat(["plot", "heightColumns", "ReferencedColumn1"])).request("ReferencedColumn");
+						getWeave().path(plotters.concat(["plot", "labelColumn", 0])).request("ReferencedColumn");
+						getWeave().path(plotters.concat(["plot", "sortColumn", 0])).request("ReferencedColumn");
+						
+						/////////////////// Set session default values ///////////////////
+						keys = [
+							plotters.concat(["plot", "barSpacing"]),
+							plotters.concat(["plot", "groupBySortColumn"]),
+							plotters.concat(["plot", "zoomToSubset"]),
+							plotters.concat(["plot", "zoomToSubsetBars"]),
+						];
+						values = [
+							0.75,
+							true,
+							true,
+							true
+						];
+						for( i = 0; i < keys.length; ++i )
+							getWeave().path(keys[i]).state(values[i]);
+							
+						/////////////////// Set columns metadata ///////////////////
+						keys = [
+							["defaultColorDataColumn", "internalDynamicColumn"],
+							plotters.concat(["plot", "heightColumns", "ReferencedColumn1"]),
+							plotters.concat(["plot", "labelColumn", 0]),
+							plotters.concat(["plot", "sortColumn", 0])
+						];
+						values = [
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": 255650, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": 255650, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+						];
+						for( i = 0; i < keys.length; i++ )
+							setColumnMetadata( getWeave(), keys[i], values[i], "WeaveDataSource" );
+						
+					}
+					else if( text == "Scatterplot" )
+					{
+						var tool = "ScatterPlotTool",
+							plotters = [ tool, "children", "visualization", "plotManager", "plotters" ],
+							layerSettings = [ tool, "children", "visualization", "plotManager", "layerSettings" ],
+							i = 0, keys = [], values = [];
+							
+						// Create tool and bring to front
+						getWeave().path(tool).request(tool).state({
+							"maximized": true, "panelBackgroundColor": 16382715
+						});
+						getWeave().path(colorLegend).state({"zOrder": -1});
+						getWeave().path().reorder([tool]);
+						
+						getWeave().path(plotters.concat(["Lines"])).request("CustomGlyphPlotter");
+						getWeave().path(plotters.concat(["Labels"])).request("TextGlyphPlotter");
+						
+						/////////////////// Set session default values ///////////////////
+						keys = [
+							plotters.concat(["Lines", "zoomToSubset"]),
+							plotters.concat(["Lines", "function_drawPlot"]),
+							layerSettings.concat(["Lines", "selectable"]),
+							plotters.concat(["Labels", "yScreenOffset"]),
+							layerSettings.concat(["Labels", "selectable"]),
+							plotters.concat(["xAxis", "tickCountRequested"])
+						];
+						values = [
+							true,
+							customGlyphLines,
+							false,
+							20,
+							false,
+							40
+						];
+						for( i = 0; i < keys.length; i++ )
+							getWeave().path(keys[i]).state(values[i]);
+							
+							
+						/////////////////// Set columns metadata ///////////////////
+						keys = [
+							["defaultColorDataColumn", "internalDynamicColumn"],
+							plotters.concat(["Lines", "dataX"]),
+							plotters.concat(["Lines", "dataY"]),
+							plotters.concat(["plot", "dataX"]),
+							plotters.concat(["plot", "dataY"]),
+							plotters.concat(["Labels", "dataX"]),
+							plotters.concat(["Labels", "dataY"]),
+							plotters.concat(["Labels", "text"])
+						];
+						values = [
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.denominator, "sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.denominator, "sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.denominator, "sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) },
+							{ "weaveEntityId": cardInModal.numerator, 	"sqlParams": toArray(cardInModal.sqlFilter) }
+						];
+						for( i = 0; i < keys.length; i++ )
+							setColumnMetadata( getWeave(), keys[i], values[i], "WeaveDataSource" );
+						
+						// Reorder the AS3 lines behind the scatterplot bubbles
+						getWeave().path(plotters).reorder(["xAxis", "yAxis", "Lines", "plot", "probeLine", "regressionLine", "Labels"]);
+					}
+					else if( text == "Map" )
+					{
+						var tool = "MapTool",
+							plotters = [ tool, "children", "visualization", "plotManager", "plotters" ],
+							layerSettings = [ tool, "children", "visualization", "plotManager", "layerSettings" ],
+							i = 0, keys = [], values = [];
+							
+						// Create tool and bring to front
+						getWeave().path(tool).request(tool).state({
+							"maximized": true,
+							"panelBackgroundColor": 16382715,
+							"showZoomControls": false,
+							"maptoolsLocation": 1});
+						getWeave().path(colorLegend).state({
+							"panelWidth": "20%",
+							"panelHeight": "60%",
+							"panelX": "0%",
+							"panelY": "0%",
+							"zOrder": 1});
+
+						getWeave().path().reorder([tool, colorLegend]);
+						
+						// Create geometry layer and plot layers
+						getWeave().path(plotters.concat(["CHRA"])).request("GeometryPlotter");
+						/*
+						getWeave().path(plotters.concat(["NumeratorPlotter"])).request("ScatterPlotPlotter");
+						getWeave().path(plotters.concat(["NumeratorLabels"])).request("GeometryLabelPlotter");
+						*/
+						
+						/////////////////// Set session default values ///////////////////
+						keys = [
+							["defaultSubsetKeyFilter", "includeMissingKeys"],
+							["defaultSubsetKeyFilter", "included"],
+							plotters.concat(["CHRA", "line", "color", "defaultValue"]) 
+							/*,
+							plotters.concat(["NumeratorLabels", "color", "defaultValue"]),
+							plotters.concat(["NumeratorLabels", "size", "defaultValue"]),
+							layerSettings.concat(["NumeratorLabels", "selectable"]),
+							plotters.concat(["NumeratorPlotter", "fill", "color", "defaultValue"]),
+							plotters.concat(["NumeratorPlotter", "minScreenRadius"]),
+							plotters.concat(["NumeratorPlotter", "maxScreenRadius"])
+							*/
+						];
+						values = [ 
+							false,
+							cardInModal.keyFilter.toString(),
+							0
+							/*,
+							16777215,
+							12,
+							false,
+							13260,
+							1,
+							20
+							*/
+						];
+						for( i = 0; i < keys.length; i++ )
+							getWeave().path(keys[i]).state(values[i]);
+						
+						
+						/////////////////// Set columns metadata ///////////////////
+						keys = [
+							["defaultColorDataColumn", "internalDynamicColumn"],
+							plotters.concat(["CHRA", "geometryColumn", "internalDynamicColumn"])
+							/*,
+							plotters.concat(["NumeratorPlotter", "dataX"]),
+							plotters.concat(["NumeratorPlotter", "dataY"]),
+							plotters.concat(["NumeratorPlotter", "sizeBy"]),
+							plotters.concat(["NumeratorLabels", "geometryColumn", "internalDynamicColumn"]),
+							plotters.concat(["NumeratorLabels", "text"])
+							*/
+						];
+						values = [
+							{ "weaveEntityId": cardInModal.numerator, "sqlParams": toArray(cardInModal.sqlFilter) },
+							cardInModal.geometry
+							/*,
+							cardInModal.geometry,
+							cardInModal.geometry,
+							{ "weaveEntityId": cardInModal.numerator, "sqlParams": toArray(cardInModal.sqlFilter) },
+							cardInModal.geometry,
+							{ "weaveEntityId": cardInModal.numerator, "sqlParams": toArray(cardInModal.sqlFilter) }
+							*/
+						];
+						for( i = 0; i < keys.length; i++ )
+							setColumnMetadata( getWeave(), keys[i], values[i], "WeaveDataSource" );
+							
+						
+						// Remove color column to apply default 
+						//getWeave().path(plotters.concat(["NumeratorPlotter", "fill", "color", "internalDynamicColumn"])).remove(null);
+						
+						
+						// Zoom to map layer
+						setTimeout(function() {
+							getWeave().path(tool).zoomToLayer("CHRA").zoomOut();
+						}, 1000 );
+					}
+				});
+			});
+		</script>
+		
+		<div id="modal" class="modal">
+			<div class="modal-header">
+				<h3>Title</h3>
+			</div>
+			<div class="modal-body">
+				<div id="modal-body-weave" class="contentContainer">
+					<ul class="addCardDynamicPillGroup" style="float: right;">
+						<li id="pillTable"><a href="#">Table</a></li>
+						<li id="pillChart"><a href="#">Chart</a></li>
+						<li id="pillMap"><a href="#">Map</a></li>
+					</ul>
+					<div id="weaveContent">
+						<div id="flashContent">
+							<p style="font-size:25px;padding-top:25px;">
+								To view this page ensure that Adobe Flash Player version 
+								10.2.0 or greater is installed. 
+							</p>
+							<script type="text/javascript"> 
+								var pageHost = ((document.location.protocol == "https:") ? "https://" : "http://"); 
+								document.write("<a href='http://www.adobe.com/go/getflashplayer'><img src='" 
+												+ pageHost + "www.adobe.com/images/shared/download_buttons/get_flash_player.gif' alt='Get Adobe Flash player' /></a>" ); 
+							</script> 
+						</div>
+					</div>
+				</div>
+				<div id="modal-body-add" class="contentContainer">
+					<div class="addCardInputRow">
+						<label>Card Title</label>
+						<input id="modalAddTitle" type="text" />
+					</div>
+					<div class="addCardInputRow">
+						<label>Target</label>
+						<input id="modalAddTarget" type="text" />
+					</div>
+					<div id="diseaseCodeRow" class="addCardInputRow">
+						<label>Disease Code</label>
+						<div class="addCardDynamicSelectWrapper">
+							<select>
+								
+							</select>
+						</div>
+					</div>
+					<div id="diseaseIndicatorRow" class="addCardInputRow">
+						<label>Indicator</label>
+						<div class="addCardDynamicSelectWrapper">
+							<select>
+							
+							</select>
+						</div>
+					</div>
+					<div id="diseaseYearRow" class="addCardInputRow">
+						<label>Year</label>
+						<div class="addCardDynamicSelectWrapper">
+							<select>
+							
+							</select>
+						</div>
+					</div>
+					<div id="demographicRaceRow" class="addCardInputRow">
+						<label>Race</label>
+						<ul class="addCardDynamicPillGroup">
+							<li class="active"><a href="#">White</a></li>
+							<li><a href="#">Black</a></li>
+						</ul>
+					</div>
+					<div id="demographicGenderRow" class="addCardInputRow">
+						<label>Gender</label>
+						<ul class="addCardDynamicPillGroup">
+							<li class="active"><a href="#">Male</a></li>
+							<li><a href="#">Female</a></li>
+						</ul>
+					</div>
+					<button id="addCardSaveBtn" class="btn" style="display:block; position:relative; margin:30px auto;">Save</button>
+				</div>
+			</div>
+			<div class="modal-footer">
+			</div>
+		</div>
+		<div class="modal-backdrop"></div>
+	</body>
+</html>    
